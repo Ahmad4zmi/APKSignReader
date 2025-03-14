@@ -32,6 +32,9 @@ jobs:
             ~/.gradle/wrapper/dists/
           key: ${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
 
+      - name: Set executable permission for gradlew
+        run: chmod +x ./gradlew
+
       - name: Build with Gradle
         run: |
           ./gradlew assemble
@@ -43,3 +46,4 @@ jobs:
         with:
           name: APKKiller(v${{ env.version }}@${{ env.commit }})
           path: app/build/outputs/apk/**/app-*.apk
+          
