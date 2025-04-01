@@ -15,6 +15,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+import android.content.Intent;
+import android.provider.Settings;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -26,13 +28,18 @@ public class MainActivity extends Activity {
     Button btnGet, btnSave;
     TextView resultBase64, resultCpp;
 
+    private static final int REQUEST_CODE_STORAGE_PERMISSION = 1;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_activity);
 
+        // Request permissions based on SDK version
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
+            if (!isStoragePermissionGranted()) {
+                requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_CODE_STORAGE_PERMISSION);
+            }
         }
 
         appPkg = findViewById(R.id.appPkg);
@@ -45,7 +52,7 @@ public class MainActivity extends Activity {
             public void onClick(View view) {
                 try {
                     PackageManager packageManager = getPackageManager();
-                    PackageInfo packageInfo = packageManager.getPackageInfo(appPkg.getText().toString(), PackageManager.GET_SIGNATURES);
+                    PackageInfo packageInfo = packageManager.getPackageInfo(appPkg.getText().toString(), PackageManager.GET_SIGNING_CERTIFICATES);
 
                     Signature[] signatures = packageInfo.signatures;
 
@@ -85,18 +92,50 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View view) {
                 try {
+                    // Check if permissions are granted
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isStoragePermissionGranted()) {
+                        // Prompt user to grant storage permissions
+                        Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                        startActivityForResult(intent, REQUEST_CODE_STORAGE_PERMISSION);
+                        return;
+                    }
+
                     String path = appPkg.getText().toString() + "_signatures.txt";
                     StringBuilder sb = new StringBuilder();
                     sb.append(resultBase64.getText().toString() + "\n");
                     sb.append(resultCpp.getText().toString() + "\n");
-                    FileOutputStream fos = new FileOutputStream(new File("/sdcard", path));
+
+                    // Saving the signature data to a file in a safe location for scoped storage
+                    File file = new File(getExternalFilesDir(null), path);
+                    FileOutputStream fos = new FileOutputStream(file);
                     fos.write(sb.toString().getBytes());
                     fos.close();
-                    Toast.makeText(MainActivity.this, "Saved to " + path, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Saved to " + file.getAbsolutePath(), Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
         });
+    }
+
+    // Check if storage permission is granted
+    private boolean isStoragePermissionGranted() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager();
+        } else {
+            return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CODE_STORAGE_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Permission granted", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 }
