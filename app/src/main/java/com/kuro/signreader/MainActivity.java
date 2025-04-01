@@ -1,4 +1,5 @@
 package com.kuro.signreader;
+
 import android.os.Environment;
 import android.Manifest;
 import android.app.Activity;
@@ -17,6 +18,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import android.content.Intent;
 import android.provider.Settings;
+import android.os.Environment;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -28,17 +30,22 @@ public class MainActivity extends Activity {
     Button btnGet, btnSave;
     TextView resultBase64, resultCpp;
 
-    private static final int REQUEST_CODE_STORAGE_PERMISSION = 1;
-
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_activity);
 
-        // Request permissions based on SDK version
+        // Check permissions for Android 10 and above (Scoped Storage)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (!isStoragePermissionGranted()) {
-                requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQUEST_CODE_STORAGE_PERMISSION);
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
+        }
+
+        // For Android 11 and above (MANAGE_EXTERNAL_STORAGE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                // If permission is not granted, request it
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                startActivityForResult(intent, 1);
             }
         }
 
@@ -54,7 +61,7 @@ public class MainActivity extends Activity {
                     PackageManager packageManager = getPackageManager();
                     PackageInfo packageInfo = packageManager.getPackageInfo(appPkg.getText().toString(), PackageManager.GET_SIGNING_CERTIFICATES);
 
-                    Signature[] signatures = packageInfo.signatures;
+                    Signature[] signatures = packageInfo.signingInfo.getApkContentsSigners();
 
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     DataOutputStream dos = new DataOutputStream(baos);
@@ -92,25 +99,25 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View view) {
                 try {
-                    // Check if permissions are granted
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isStoragePermissionGranted()) {
-                        // Prompt user to grant storage permissions
-                        Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                        startActivityForResult(intent, REQUEST_CODE_STORAGE_PERMISSION);
-                        return;
-                    }
-
                     String path = appPkg.getText().toString() + "_signatures.txt";
                     StringBuilder sb = new StringBuilder();
                     sb.append(resultBase64.getText().toString() + "\n");
                     sb.append(resultCpp.getText().toString() + "\n");
 
-                    // Saving the signature data to a file in a safe location for scoped storage
-                    File file = new File(getExternalFilesDir(null), path);
-                    FileOutputStream fos = new FileOutputStream(file);
+                    FileOutputStream fos;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        // Save to app's external directory (Scoped Storage)
+                        File appDir = getExternalFilesDir(null);
+                        File file = new File(appDir, path);
+                        fos = new FileOutputStream(file);
+                    } else {
+                        // Legacy external storage (Android 9 and below)
+                        fos = new FileOutputStream(new File("/sdcard", path));
+                    }
+
                     fos.write(sb.toString().getBytes());
                     fos.close();
-                    Toast.makeText(MainActivity.this, "Saved to " + file.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Saved to " + path, Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -118,23 +125,17 @@ public class MainActivity extends Activity {
         });
     }
 
-    // Check if storage permission is granted
-    private boolean isStoragePermissionGranted() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return Environment.isExternalStorageManager();
-        } else {
-            return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-        }
-    }
-
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CODE_STORAGE_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Permission granted", Toast.LENGTH_SHORT).show();
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 1) {
+            // Handle the result of the permission request
+            if (Environment.isExternalStorageManager()) {
+                // Permission granted, proceed with file operations
+                Toast.makeText(this, "Permission granted!", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show();
+                // Permission denied
+                Toast.makeText(this, "Permission denied!", Toast.LENGTH_SHORT).show();
             }
         }
     }
