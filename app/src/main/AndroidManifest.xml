@@ -2,13 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Scoped Storage and external file access -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" android:maxSdkVersion="33"/>
-
-    <!-- Application setup -->
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:required="true"/>
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" android:required="false"/>
+    
     <application
         android:allowBackup="true"
+        android:requestLegacyExternalStorage="true"  <!-- Needed for Android 10 -->
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -16,8 +16,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.APKSignReader"
-        tools:targetApi="34"> <!-- Target Android 14 (API level 34) -->
-        
+        tools:targetApi="31">
+
         <activity android:name=".MainActivity"
             android:label="@string/app_name"
             android:exported="true"
