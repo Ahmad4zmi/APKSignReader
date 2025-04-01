@@ -1,5 +1,5 @@
 package com.kuro.signreader;
-
+import android.os.Environment;
 import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageInfo;
